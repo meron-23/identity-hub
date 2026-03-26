@@ -1,0 +1,10 @@
+{
+  "US": {
+    "passport": "\d{9}",
+    "drivers_license": "[A-Z0-9]{1,9}"
+  },
+  "CA": {
+    "passport": "\d{9}",
+    "drivers_license": "[A-Z0-9]{1,15}"
+  }
+}

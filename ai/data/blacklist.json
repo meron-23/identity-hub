@@ -1,0 +1,10 @@
+{
+  "ssn": [
+    "000-00-0000",
+    "123-45-6789"
+  ],
+  "emails": [
+    "fraud@example.com",
+    "blocked_user@example.com"
+  ]
+}
