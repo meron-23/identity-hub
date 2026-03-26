@@ -1,0 +1,13 @@
+{
+  "name": "identity-hub",
+  "version": "1.0.0",
+  "description": "Identity Hub Project - DID, Biometrics, and Cards",
+  "main": "index.js",
+  "scripts": {
+    "setup": "bash scripts/setup.sh",
+    "seed": "node scripts/seed.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

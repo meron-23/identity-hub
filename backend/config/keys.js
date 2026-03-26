@@ -1,0 +1,4 @@
+module.exports = {
+  publicKey: 'your_public_key_here',
+  privateKey: 'your_private_key_here'
+};
