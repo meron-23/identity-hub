@@ -4,6 +4,6 @@
   "description": "Card simulation and tokenization for Identity Hub",
   "main": "simulation/paymentSimulator.js",
   "dependencies": {
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.1"
   }
 }
