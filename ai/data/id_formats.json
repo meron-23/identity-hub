@@ -1,10 +1,14 @@
 {
   "US": {
-    "passport": "\d{9}",
+    "passport": "\\d{9}",
     "drivers_license": "[A-Z0-9]{1,9}"
   },
   "CA": {
-    "passport": "\d{9}",
+    "passport": "\\d{9}",
     "drivers_license": "[A-Z0-9]{1,15}"
+  },
+  "ET": {
+    "passport": "[A-Z]{1,2}\\d{6,8}",
+    "national_id": "\\d{12}"
   }
 }
