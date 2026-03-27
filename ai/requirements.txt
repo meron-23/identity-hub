@@ -5,3 +5,9 @@ pandas
 scikit-learn
 matplotlib
 jupyter
+easyocr
+torch
+torchvision
+torchaudio
+mrz
+flask

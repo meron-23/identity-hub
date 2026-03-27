@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Identity Hub | eKYC Orchestrator Test</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --bg: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --glass: rgba(255, 255, 255, 0.03);
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(79, 70, 229, 0.1) 0px, transparent 50%);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 100%;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(to right, #818cf8, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        p.subtitle {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
+
+        .glass-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 2rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .upload-section {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .drop-zone {
+            border: 2px dashed var(--border);
+            border-radius: 16px;
+            padding: 3rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .drop-zone:hover, .drop-zone.active {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .drop-zone input {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .drop-zone p {
+            color: var(--text-muted);
+        }
+
+        #preview-container {
+            display: none;
+            margin-top: 1.5rem;
+            text-align: center;
+        }
+
+        #image-preview {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 10px 20px -5px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #results {
+            display: none;
+            margin-top: 2rem;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .badge {
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+        }
+
+        .badge-approve { background: rgba(34, 197, 94, 0.2); color: var(--success); border: 1px solid var(--success); }
+        .badge-reject { background: rgba(239, 68, 68, 0.2); color: var(--danger); border: 1px solid var(--danger); }
+        .badge-review { background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid var(--warning); }
+
+        .score-container {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .score-value {
+            font-size: 4rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .score-label {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .stat-card {
+            background: var(--glass);
+            padding: 1rem;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-value {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .json-viewer {
+            margin-top: 2rem;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem;
+            border-radius: 12px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            overflow-x: auto;
+            color: #a5b4fc;
+        }
+
+        .loading-spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s linear infinite;
+            display: none;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        footer {
+            margin-top: 3rem;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>eKYC Orchestrator</h1>
+            <p class="subtitle">Temporary testing interface for identity verification & risk scoring</p>
+        </header>
+
+        <main class="glass-card">
+            <div class="upload-section">
+                <div class="drop-zone" id="drop-zone">
+                    <p>Click or drag and drop your document image here</p>
+                    <p style="font-size: 0.8rem; margin-top: 0.5rem;">(Passport, Driver's License, or ID Card)</p>
+                    <input type="file" id="file-input" accept="image/*">
+                </div>
+                
+                <div id="preview-container">
+                    <img id="image-preview" src="" alt="Preview">
+                </div>
+
+                <button id="verify-btn" class="btn" disabled>
+                    <span class="loading-spinner" id="spinner"></span>
+                    <span id="btn-text">Run Verification</span>
+                </button>
+            </div>
+
+            <div id="results">
+                <div class="result-header">
+                    <h2>Verification Result</h2>
+                    <span id="recommendation-badge" class="badge">UNKNOWN</span>
+                </div>
+
+                <div class="score-container">
+                    <div id="score-display" class="score-value">--</div>
+                    <div class="score-label">AGGREGATED RISK SCORE</div>
+                </div>
+
+                <div class="grid">
+                    <div class="stat-card">
+                        <div class="stat-label">OCR RISK</div>
+                        <div id="ocr-risk" class="stat-value">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">DOC RISK</div>
+                        <div id="doc-risk" class="stat-value">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">DATA RISK</div>
+                        <div id="data-risk" class="stat-value">--</div>
+                    </div>
+                </div>
+
+                <div class="json-viewer" id="json-viewer"></div>
+            </div>
+        </main>
+
+        <footer>
+            &copy; 2026 Identity Hub Project | v1.1
+        </footer>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('file-input');
+        const dropZone = document.getElementById('drop-zone');
+        const imagePreview = document.getElementById('image-preview');
+        const previewContainer = document.getElementById('preview-container');
+        const verifyBtn = document.getElementById('verify-btn');
+        const resultsDiv = document.getElementById('results');
+        const spinner = document.getElementById('spinner');
+        const btnText = document.getElementById('btn-text');
+
+        const recommendationBadge = document.getElementById('recommendation-badge');
+        const scoreDisplay = document.getElementById('score-display');
+        const ocrRisk = document.getElementById('ocr-risk');
+        const docRisk = document.getElementById('doc-risk');
+        const dataRisk = document.getElementById('data-risk');
+        const jsonViewer = document.getElementById('json-viewer');
+
+        fileInput.addEventListener('change', handleFile);
+
+        function handleFile(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    imagePreview.src = e.target.result;
+                    previewContainer.style.display = 'block';
+                    verifyBtn.disabled = false;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        verifyBtn.addEventListener('click', async () => {
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            // Update UI to loading state
+            verifyBtn.disabled = true;
+            spinner.style.display = 'inline-block';
+            btnText.textContent = 'Processing...';
+            resultsDiv.style.display = 'none';
+
+            const apiUrl = window.location.port === '5001' ? '/ekyc/verify-document' : 'http://localhost:5001/ekyc/verify-document';
+            
+            const formData = new FormData();
+            formData.append('image', file);
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) throw new Error('Verification failed');
+
+                const data = await response.json();
+                displayResults(data);
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                verifyBtn.disabled = false;
+                spinner.style.display = 'none';
+                btnText.textContent = 'Run Verification';
+            }
+        });
+
+        function displayResults(data) {
+            resultsDiv.style.display = 'block';
+            
+            // Score and Recommendation
+            const score = data.risk_score;
+            scoreDisplay.textContent = score.toFixed(2);
+            
+            recommendationBadge.textContent = data.recommendation;
+            recommendationBadge.className = 'badge ' + 
+                (data.recommendation === 'APPROVE' ? 'badge-approve' : 
+                 data.recommendation === 'REJECT' ? 'badge-reject' : 'badge-review');
+
+            // Colorize score
+            if (score > 70) scoreDisplay.style.color = 'var(--danger)';
+            else if (score > 30) scoreDisplay.style.color = 'var(--warning)';
+            else scoreDisplay.style.color = 'var(--success)';
+
+            // Component Risks
+            if (data.component_risks) {
+                ocrRisk.textContent = data.component_risks.ocr.toFixed(2) + '%';
+                docRisk.textContent = data.component_risks.document.toFixed(2) + '%';
+                dataRisk.textContent = data.component_risks.data.toFixed(2) + '%';
+            }
+            
+            // For now, let's just show the full JSON
+            jsonViewer.textContent = JSON.stringify(data, null, 2);
+            
+            // Scroll to results
+            resultsDiv.scrollIntoView({ behavior: 'smooth' });
+        }
+    </script>
+</body>
+</html>
