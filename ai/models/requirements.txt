@@ -1,0 +1,9 @@
+# Core dependencies for identity verification
+opencv-python>=4.8.0
+numpy>=1.21.0
+insightface
+
+# Additional dependencies
+pillow>=10.0.0
+pytesseract>=0.3.10
+python-dotenv>=1.0.0
