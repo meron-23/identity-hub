@@ -78,31 +78,19 @@ def calculate_liveness_score(image, mode: str = "rgb") -> float:
 
 def interactive_liveness(camera_callback=None, display_callback=None) -> dict:
     """
-    Active liveness detection: Dynamic Circle Tracking.
-    User must follow a moving segment around a dashed circular path with their nose.
+    Passive liveness detection: Static Circle Tracking.
+    User must position their face within the static oval frame and stay still.
     """
     if camera_callback is None:
-        return {"is_live": True, "score": 1.0, "method": "circle_tracking"}
+        return {"is_live": True, "score": 1.0, "method": "static_tracking"}
         
     analyzer = _get_face_analyzer()
-    cx, cy, r = None, None, None
-    
-    total_segments = 36
-    followed_segments = set()
-    
-    # Fast rotation: 2.5 seconds for a full circle at ~30fps
-    speed = (2.0 * np.pi) / (30 * 2.5)  
-    threshold_dist = 40.0  # Tighten threshold for shrunk circle
-    theta = 0.0
-    direction = 1  # Clockwise
     
     start_time = time.time()
-    last_nose = None
+    frames_in_circle = 0
+    required_frames = 45 # about 1.5 seconds at 30 fps
     
-    segment_size = (2 * np.pi) / total_segments
-    
-    # Generous 60 second timeout: allow them to keep looping until finished!
-    while time.time() - start_time < 60.0: 
+    while time.time() - start_time < 15.0: 
         frame = camera_callback()
         if frame is None:
             break
@@ -117,87 +105,30 @@ def interactive_liveness(camera_callback=None, display_callback=None) -> dict:
             if hasattr(face, 'kps') and face.kps is not None:
                 nose_x, nose_y = int(face.kps[2][0]), int(face.kps[2][1])
                 
-        # Initialize circle anchor
-        if cx is None and nose_x is not None:
-            cx, cy = nose_x, nose_y
-            # Make the circle smaller (shrunk)
-            r = min(frame.shape[0], frame.shape[1]) // 4
-            
-        if cx is not None:
-            # Target Computation
-            target_x = int(cx + r * np.cos(theta))
-            target_y = int(cy + r * np.sin(theta))
-            
-            completion = len(followed_segments) / total_segments
-            
-            if nose_x is not None:
-                # Anti-Cheat: Teleportation jumping check
-                if last_nose is not None:
-                    dist_jump = np.hypot(nose_x - last_nose[0], nose_y - last_nose[1])
-                    if dist_jump > 120:
-                        followed_segments.clear()  # User cheated/teleported, reset!
-                last_nose = (nose_x, nose_y)
-                
-                # Match logic
-                dist = np.hypot(nose_x - target_x, nose_y - target_y)
-                if dist < threshold_dist:
-                    seg_idx = int((theta % (2 * np.pi)) / segment_size)
-                    followed_segments.add(seg_idx)
-            
-            # Render Segmented Circle (Like the reference image)
-            # The snake thing is the color change on the circle
-            current_seg_idx = int((theta % (2 * np.pi)) / segment_size)
-            
-            for i in range(total_segments):
-                seg_angle_center = i * segment_size
-                
-                # Determine colors
-                if i == current_seg_idx:
-                    # Head of the snake (Active target segment)
-                    seg_color = (0, 255, 255) # Yellow Target
-                    thickness = 8
-                elif i in followed_segments:
-                    # Followed segments trail
-                    prog = i / total_segments
-                    seg_color = (0, int(255 * prog), int(255 * (1.0 - prog))) # Red to Green blend
-                    thickness = 6
-                else:
-                    # Base uncompleted path
-                    seg_color = (255, 255, 255) # White, like the image
-                    thickness = 4
-                
-                # Draw the segment as a short arc
-                start_angle = np.degrees(seg_angle_center - segment_size * 0.35)
-                end_angle = np.degrees(seg_angle_center + segment_size * 0.35)
-                
-                cv2.ellipse(frame, (cx, cy), (r, r), 0, start_angle, end_angle, seg_color, thickness, cv2.LINE_AA)
-            
-            # Update Angle
-            theta += speed * direction
-            
-            # Overlay Beautiful Text
-            cv2.putText(frame, "Follow the yellow segment with your face", (30, 50), 
-                       cv2.FONT_HERSHEY_DUPLEX, 0.8, (255, 255, 255), 1, cv2.LINE_AA)
-            current_color = (0, int(255 * completion), int(255 * (1.0 - completion)))
-            cv2.putText(frame, f"Tracking: {int(completion * 100)}%", (30, 90), 
-                       cv2.FONT_HERSHEY_DUPLEX, 0.7, current_color, 1, cv2.LINE_AA)
-                       
-            # Segment visualizer bar
-            bar_w = 400
-            bar_fill = int(bar_w * completion)
-            cv2.rectangle(frame, (30, 110), (30 + bar_w, 120), (50, 50, 50), -1)
-            cv2.rectangle(frame, (30, 110), (30 + bar_fill, 120), current_color, -1)
-            if completion >= 0.90:  # 90% threshold to pass instantly
-                break
-            elif theta >= 4 * np.pi and len(followed_segments) == 0:  # Fail if 0 interaction after 2 laps
-                break
-            elif theta >= 6 * np.pi:  # Enforce maximum of 3 complete circles, then stop and fail
-                break
+        # the center of the frame is where the static UI oval is
+        h, w = frame.shape[:2]
+        center_x, center_y = w // 2, h // 2 - 20 
+        
+        # Check if nose is within the oval area
+        if nose_x is not None and nose_y is not None:
+            dist = np.hypot(nose_x - center_x, nose_y - center_y)
+            if dist < 60.0:  # within threshold
+                frames_in_circle += 1
+            else:
+                frames_in_circle = max(0, frames_in_circle - 1)
+        
+        completion = min(1.0, frames_in_circle / required_frames)
         
         if display_callback:
-            display_callback(frame)
+            if completion > 0.3:
+                display_callback(frame, f"Checking Liveness... {int(completion*100)}%")
+            else:
+                display_callback(frame, "Ensuring Liveness...")
             
-    score = len(followed_segments) / total_segments
+        if frames_in_circle >= required_frames:
+            break
+            
+    score = min(1.0, frames_in_circle / required_frames)
     is_live = score >= 0.90
     
     print(f"   📊 Liveness Score: {score:.4f} (Live: {is_live})")
@@ -205,6 +136,6 @@ def interactive_liveness(camera_callback=None, display_callback=None) -> dict:
     return {
         "is_live": is_live,
         "score": round(score, 4),
-        "method": "circle_tracking"
+        "method": "static_tracking"
     }
 
