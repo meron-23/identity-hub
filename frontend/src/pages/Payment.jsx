@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import cardService from '../services/cardService';
-import WebcamCapture from '../components/WebcamCapture';
+import BiometricCapture from '../components/BiometricCapture';
 
 const styles = `
   @keyframes pulse {
@@ -75,6 +76,7 @@ const styles = `
 `;
 
 export default function Payment() {
+  const { user, token } = useAuth();
   const [cards, setCards] = useState([]);
   const [selectedCard, setSelectedCard] = useState('');
   const [amount, setAmount] = useState('');
@@ -82,80 +84,133 @@ export default function Payment() {
   const [statusMsg, setStatusMsg] = useState('');
   const [showFaceFlow, setShowFaceFlow] = useState(false);
   const [transactionData, setTransactionData] = useState(null);
-
-  const user_did = 'did:example:123456789';
+  const [biometricData, setBiometricData] = useState(null);
+  const [riskAnalysis, setRiskAnalysis] = useState(null);
 
   useEffect(() => {
     const fetchCards = async () => {
+      if (!user?.userId) return;
+      
       try {
-        const res = await cardService.getCards(user_did);
+        const res = await cardService.getCards(user.userId);
         setCards(res.data.filter(c => c.status === 'active'));
       } catch (err) {
-        console.error('Failed to load active cards');
+        console.error('Failed to load active cards:', err);
+        setStatusMsg('Failed to load payment methods');
       }
     };
     fetchCards();
-  }, []);
+  }, [user]);
 
-  const handlePay = async (requireFace = false) => {
+  const handlePay = async (requireFace = false, biometricImage = null) => {
     if (!selectedCard || !amount) {
       setStatusMsg('Please select a card and enter an amount.');
       return;
     }
 
+    if (requireFace && !biometricImage) {
+      setStatusMsg('Please complete biometric verification first.');
+      return;
+    }
+
     setLoading(true);
-    setStatusMsg('Processing payment securely...');
+    setStatusMsg('Processing payment with AI risk analysis...');
+    
     try {
-      const res = await cardService.processPayment({ user_did, card_id: selectedCard, amount: Number(amount), requireFace });
+      const biometricPayload = requireFace && biometricImage ? {
+        selfie: biometricImage
+      } : null;
+
+      const res = await cardService.processPayment({ 
+        user_did: user.userId, 
+        card_id: selectedCard, 
+        amount: Number(amount), 
+        requireFace,
+        biometricData: biometricPayload
+      });
+      
       const authResult = res.data.authResult;
+      const aiAnalysis = res.data.aiAnalysis;
+      
+      setRiskAnalysis(aiAnalysis);
       
       if (authResult.status === 'advanced_verification_required') {
-        setStatusMsg('High-Value Transaction Detected. Biometrics Required.');
+        setStatusMsg(`⚠️ High-Risk Transaction Detected (Risk Score: ${aiAnalysis.riskScore}). Biometric verification required.`);
         setShowFaceFlow(true);
       } else if (authResult.success) {
-        setStatusMsg(`Payment Approved! ID: ${authResult.transactionId}`);
+        setStatusMsg(`✅ Payment Approved! ID: ${authResult.transactionId}`);
         setTransactionData(res.data.transaction);
         setShowFaceFlow(false);
+        setBiometricData(null);
       } else {
-        setStatusMsg(`Payment Declined: ${authResult.status}`);
+        setStatusMsg(`❌ Payment Declined: ${authResult.status} (Risk Score: ${aiAnalysis.riskScore})`);
         setShowFaceFlow(false);
+        setBiometricData(null);
       }
     } catch (err) {
+      console.error('Payment error:', err);
       setStatusMsg(err.response?.data?.error || 'Payment processing failed');
     } finally {
       setLoading(false);
     }
   };
 
-  const submitFaceFlow = () => {
+  const handleBiometricCapture = (imageData) => {
+    setBiometricData(imageData);
+    setStatusMsg('Biometric data captured. Processing...');
+  };
+
+  const submitBiometricVerification = () => {
+    if (!biometricData) {
+      setStatusMsg('Please capture your biometric data first.');
+      return;
+    }
+    
     setShowFaceFlow(false);
-    handlePay(true);
+    handlePay(true, biometricData);
+  };
+
+  const getRiskLevelColor = (score) => {
+    if (score < 30) return '#10b981'; // Green
+    if (score < 60) return '#f59e0b'; // Yellow
+    if (score < 85) return '#f97316'; // Orange
+    return '#ef4444'; // Red
+  };
+
+  const getRiskLevelText = (score) => {
+    if (score < 30) return 'Low Risk';
+    if (score < 60) return 'Medium Risk';
+    if (score < 85) return 'High Risk';
+    return 'Very High Risk';
   };
 
   return (
-    <div style={{ padding: '40px 20px', maxWidth: '600px', margin: '0 auto', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+    <div style={{ padding: '40px 20px', maxWidth: '700px', margin: '0 auto', minHeight: '100vh' }}>
       <style>{styles}</style>
       
       <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-        <h1 style={{ fontSize: '2.5rem', fontWeight: '800', color: '#111827', margin: 0 }}>Secure Checkout</h1>
-        <p style={{ color: '#6b7280', fontSize: '1.1rem', marginTop: '10px' }}>Powered by Identity Hub Network</p>
+        <h1 style={{ fontSize: '2.5rem', fontWeight: '800', color: '#111827', margin: 0 }}>🔐 Secure Checkout</h1>
+        <p style={{ color: '#6b7280', fontSize: '1.1rem', marginTop: '10px' }}>AI-Enhanced Transaction Security</p>
       </div>
 
       <div className="glass-card" style={{ width: '100%', padding: '40px', boxSizing: 'border-box' }}>
         
         <div style={{ marginBottom: '25px' }}>
-          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#374151', fontSize: '1.1rem' }}>Payment Method</label>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#374151', fontSize: '1.1rem' }}>
+            💳 Payment Method
+          </label>
           <div style={{ position: 'relative' }}>
             <select 
               value={selectedCard} 
               onChange={(e) => setSelectedCard(e.target.value)}
               className="payment-input"
               style={{ appearance: 'none', cursor: 'pointer' }}
+              disabled={loading}
             >
               <option value="">Choose a card to pay with...</option>
               {cards.map(c => (
                 <option key={c._id} value={c._id}>
-                  💳 •••• {c.card_token.slice(-4)}
+                  💳 •••• {c.card_token?.slice(-4) || '****'}
                 </option>
               ))}
             </select>
@@ -166,7 +221,9 @@ export default function Payment() {
         </div>
 
         <div style={{ marginBottom: '35px' }}>
-          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#374151', fontSize: '1.1rem' }}>Amount</label>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#374151', fontSize: '1.1rem' }}>
+            💰 Amount
+          </label>
           <div style={{ position: 'relative' }}>
             <span style={{ position: 'absolute', left: '20px', top: '50%', transform: 'translateY(-50%)', fontSize: '1.5rem', color: '#9ca3af', fontWeight: 'bold' }}>$</span>
             <input 
@@ -176,6 +233,7 @@ export default function Payment() {
               placeholder="0.00"
               className="payment-input"
               style={{ paddingLeft: '45px', fontSize: '1.5rem', fontWeight: 'bold' }}
+              disabled={loading}
             />
           </div>
         </div>
@@ -185,38 +243,128 @@ export default function Payment() {
           disabled={loading || showFaceFlow} 
           className="pay-button"
         >
-          {loading ? 'Processing...' : 'Pay Securely'}
+          {loading ? '🔄 Processing...' : '🚀 Pay Securely'}
         </button>
       </div>
 
       {statusMsg && (
-        <div style={{ marginTop: '25px', width: '100%', padding: '20px', borderRadius: '16px', fontWeight: '500', textAlign: 'center', fontSize: '1.1rem', background: statusMsg.includes('Approved') ? 'rgba(16, 185, 129, 0.1)' : statusMsg.includes('Biometrics') ? 'rgba(245, 158, 11, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: statusMsg.includes('Approved') ? '#047857' : statusMsg.includes('Biometrics') ? '#b45309' : '#b91c1c', border: `1px solid ${statusMsg.includes('Approved') ? 'rgba(16, 185, 129, 0.3)' : statusMsg.includes('Biometrics') ? 'rgba(245, 158, 11, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`, backdropFilter: 'blur(10px)' }}>
+        <div style={{ 
+          marginTop: '25px', 
+          width: '100%', 
+          padding: '20px', 
+          borderRadius: '16px', 
+          fontWeight: '500', 
+          textAlign: 'center', 
+          fontSize: '1.1rem',
+          background: statusMsg.includes('Approved') || statusMsg.includes('✅') ? 'rgba(16, 185, 129, 0.1)' : 
+                     statusMsg.includes('Biometric') || statusMsg.includes('⚠️') ? 'rgba(245, 158, 11, 0.1)' : 
+                     'rgba(239, 68, 68, 0.1)', 
+          color: statusMsg.includes('Approved') || statusMsg.includes('✅') ? '#047857' : 
+                 statusMsg.includes('Biometric') || statusMsg.includes('⚠️') ? '#b45309' : 
+                 '#b91c1c', 
+          border: `1px solid ${
+            statusMsg.includes('Approved') || statusMsg.includes('✅') ? 'rgba(16, 185, 129, 0.3)' : 
+            statusMsg.includes('Biometric') || statusMsg.includes('⚠️') ? 'rgba(245, 158, 11, 0.3)' : 
+            'rgba(239, 68, 68, 0.3)'
+          }`, 
+          backdropFilter: 'blur(10px)' 
+        }}>
           {statusMsg}
         </div>
       )}
 
       {showFaceFlow && (
-        <div style={{ marginTop: '30px', width: '100%', animation: 'float 4s ease infinite' }}>
+        <div style={{ marginTop: '30px', width: '100%' }}>
           <div className="face-scanner-wrap">
             <div className="face-scanner-inner">
-              <h3 style={{ margin: '0 0 15px 0', color: '#111827', fontSize: '1.3rem' }}>Face ID Verification</h3>
-              <p style={{ color: '#4b5563', marginBottom: '25px' }}>Look at the camera to authorize this transaction.</p>
+              <h3 style={{ margin: '0 0 15px 0', color: '#111827', fontSize: '1.3rem' }}>
+                🔍 Biometric Step-Up Verification
+              </h3>
+              <p style={{ color: '#4b5563', marginBottom: '25px' }}>
+                High-risk transaction detected. Please verify your identity to proceed.
+              </p>
               
-              <div style={{ marginBottom: '25px', display: 'flex', justifyContent: 'center' }}>
-                <div style={{ width: '120px', height: '120px', borderRadius: '50%', background: '#f3f4f6', border: '3px solid #3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                  <WebcamCapture />
-                  <div style={{ position: 'absolute', inset: -10, borderRadius: '50%', border: '2px solid rgba(59, 130, 246, 0.5)', animation: 'pulse 2s infinite' }}></div>
-                </div>
+              <div style={{ marginBottom: '25px' }}>
+                <BiometricCapture 
+                  onCapture={handleBiometricCapture}
+                  disabled={loading}
+                  showSelfie={true}
+                />
               </div>
 
               <button 
-                onClick={submitFaceFlow}
-                style={{ padding: '14px 28px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '12px', fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer', width: '100%', boxShadow: '0 4px 14px rgba(59, 130, 246, 0.4)' }}
+                onClick={submitBiometricVerification}
+                disabled={!biometricData || loading}
+                style={{ 
+                  padding: '14px 28px', 
+                  background: biometricData ? '#3b82f6' : '#9ca3af', 
+                  color: '#fff', 
+                  border: 'none', 
+                  borderRadius: '12px', 
+                  fontSize: '1.1rem', 
+                  fontWeight: 'bold', 
+                  cursor: biometricData && !loading ? 'pointer' : 'not-allowed', 
+                  width: '100%', 
+                  boxShadow: biometricData ? '0 4px 14px rgba(59, 130, 246, 0.4)' : 'none',
+                  transition: 'all 0.2s'
+                }}
               >
-                Scan & Complete Payment
+                {loading ? '🔄 Verifying...' : '🔐 Complete Biometric Verification'}
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {riskAnalysis && (
+        <div className="glass-card" style={{ marginTop: '30px', width: '100%', padding: '25px', boxSizing: 'border-box' }}>
+          <h4 style={{ margin: '0 0 20px 0', textAlign: 'center', fontSize: '1.2rem', color: '#111827' }}>
+            🤖 AI Risk Analysis
+          </h4>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
+            <div style={{ textAlign: 'center', padding: '15px', background: '#f9fafb', borderRadius: '8px' }}>
+              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: getRiskLevelColor(riskAnalysis.riskScore) }}>
+                {riskAnalysis.riskScore}
+              </div>
+              <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Risk Score</div>
+            </div>
+            <div style={{ textAlign: 'center', padding: '15px', background: '#f9fafb', borderRadius: '8px' }}>
+              <div style={{ fontSize: '1.2rem', fontWeight: '600', color: getRiskLevelColor(riskAnalysis.riskScore) }}>
+                {getRiskLevelText(riskAnalysis.riskScore)}
+              </div>
+              <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Risk Level</div>
+            </div>
+          </div>
+
+          {riskAnalysis.riskFactors && riskAnalysis.riskFactors.length > 0 && (
+            <div style={{ marginBottom: '15px' }}>
+              <div style={{ fontSize: '0.9rem', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
+                Risk Factors Detected:
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                {riskAnalysis.riskFactors.map((factor, index) => (
+                  <span key={index} style={{
+                    background: '#fee2e2',
+                    color: '#b91c1c',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '0.8rem',
+                    fontWeight: '500'
+                  }}>
+                    {factor.replace(/_/g, ' ')}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {riskAnalysis.biometricConfidence && (
+            <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>
+              <strong>Biometric Confidence:</strong> {Math.round(riskAnalysis.biometricConfidence * 100)}% | 
+              <strong> Liveness Score:</strong> {Math.round(riskAnalysis.livenessScore * 100)}%
+            </div>
+          )}
         </div>
       )}
 
@@ -227,19 +375,34 @@ export default function Payment() {
               <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
             </div>
           </div>
-          <h4 style={{ margin: '0 0 20px 0', textAlign: 'center', fontSize: '1.4rem', color: '#111827' }}>Digital Receipt</h4>
+          <h4 style={{ margin: '0 0 20px 0', textAlign: 'center', fontSize: '1.4rem', color: '#111827' }}>
+            📄 Digital Receipt
+          </h4>
           
           <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '15px', borderBottom: '1px dashed #e5e7eb', marginBottom: '15px' }}>
             <span style={{ color: '#6b7280' }}>Amount</span>
             <span style={{ fontWeight: 'bold', fontSize: '1.2rem' }}>${transactionData.amount.toFixed(2)}</span>
           </div>
+          
           <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '15px', borderBottom: '1px dashed #e5e7eb', marginBottom: '15px' }}>
             <span style={{ color: '#6b7280' }}>Risk Assessment</span>
-            <span style={{ fontWeight: '600', color: '#10b981' }}>{transactionData.risk_score}/100 - Secured</span>
+            <span style={{ fontWeight: '600', color: getRiskLevelColor(transactionData.risk_score) }}>
+              {transactionData.risk_score}/100 - {getRiskLevelText(transactionData.risk_score)}
+            </span>
           </div>
+
+          {transactionData.risk_factors && transactionData.risk_factors.length > 0 && (
+            <div style={{ paddingBottom: '15px', borderBottom: '1px dashed #e5e7eb', marginBottom: '15px' }}>
+              <span style={{ color: '#6b7280', display: 'block', marginBottom: '5px' }}>Risk Factors</span>
+              <div style={{ fontSize: '0.9rem' }}>
+                {transactionData.risk_factors.join(', ').replace(/_/g, ' ')}
+              </div>
+            </div>
+          )}
+          
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ color: '#6b7280' }}>Timestamp</span>
-            <span style={{ color: '#374151' }}>{new Date(transactionData.createdAt).toLocaleTimeString()}</span>
+            <span style={{ color: '#374151' }}>{new Date(transactionData.createdAt).toLocaleString()}</span>
           </div>
         </div>
       )}

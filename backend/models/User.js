@@ -2,8 +2,9 @@ const mongoose = require('mongoose');
 
 /**
  * User Model
- * Stores enrolled users with their KYC-verified data.
+ * Stores enrolled users with their KYC-verified data and AI analysis.
  * userId is a UUID generated at enrollment time.
+ * Enhanced for Challenge A compliance with comprehensive AI verification data.
  */
 const UserSchema = new mongoose.Schema(
   {
@@ -29,6 +30,25 @@ const UserSchema = new mongoose.Schema(
     faceMatchScore: {
       type: Number,
       default: null,
+    },
+    livenessScore: {
+      type: Number,
+      default: null,
+    },
+    documentAuthenticity: {
+      type: Number,
+      default: null,
+    },
+    riskScore: {
+      type: Number,
+      default: null,
+    },
+    aiAnalysis: {
+      faceRecognition: { type: String, enum: ['PASS', 'FAIL'] },
+      livenessDetection: { type: String, enum: ['PASS', 'FAIL'] },
+      deepfakeDetection: { type: String, enum: ['PASS', 'FAIL'] },
+      documentVerification: { type: String, enum: ['PASS', 'FAIL'] },
+      riskFactors: [String]
     },
     idImage: {
       type: String, // base64 or reference — stored as-is from client

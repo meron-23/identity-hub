@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import cardService from '../services/cardService';
 
 // --- Premium Card Styling & Animations ---
@@ -57,16 +58,18 @@ const ContactlessIcon = () => (
 );
 
 export default function CardManagement() {
+  const { user } = useAuth();
   const [cards, setCards] = useState([]);
   const [cardNumber, setCardNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const user_did = 'did:example:123456789';
+  // Use the real authenticated user's ID as the DID
+  const user_did = user?.userId;
 
   useEffect(() => {
-    fetchCards();
-  }, []);
+    if (user_did) fetchCards();
+  }, [user_did]);
 
   const fetchCards = async () => {
     try {
@@ -122,6 +125,15 @@ export default function CardManagement() {
       setLoading(false);
     }
   };
+
+  // Guard: wait for auth context to be ready
+  if (!user_did) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+        Loading user session...
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: '40px 20px', maxWidth: '1000px', margin: '0 auto', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
